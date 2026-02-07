@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advanced Fibrosis Risk Calculator | MASLD Indeterminate FIB-4</title>
+<meta name="description" content="Clinical calculator for predicting advanced fibrosis in MASLD patients with indeterminate FIB-4 scores (1.3-2.67). Validated L2-regularized logistic regression model.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; line-height: 1.5; }
+  .container { max-width: 700px; margin: 0 auto; padding: 32px 20px; }
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04); padding: 32px; margin-bottom: 20px; }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; letter-spacing: -0.01em; }
+  .header p { font-size: 14px; color: #64748b; }
+
+  /* Section titles */
+  .section-title { font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  .full-width { grid-column: 1 / -1; }
+
+  /* Fields */
+  .field label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+  .field label .unit { font-weight: 400; color: #9ca3af; }
+  .field input {
+    width: 100%; padding: 9px 12px; font-size: 15px;
+    border: 1.5px solid #d1d5db; border-radius: 8px; outline: none;
+    background: #fff; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .field input.error { border-color: #fca5a5; background: #fef2f2; }
+  .field .error-msg { font-size: 11px; color: #ef4444; margin-top: 2px; }
+
+  /* Toggle */
+  .toggle-group { display: flex; gap: 8px; }
+  .toggle-btn {
+    flex: 1; padding: 9px 0; font-size: 14px; font-weight: 600;
+    border: 1.5px solid #d1d5db; border-radius: 8px; cursor: pointer;
+    background: #fff; color: #6b7280; transition: all 0.15s;
+  }
+  .toggle-btn:hover { border-color: #a5b4fc; }
+  .toggle-btn.active { border-color: #6366f1; background: #eef2ff; color: #4338ca; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 12px; margin: 24px 0; }
+  .btn-calc {
+    flex: 2; padding: 13px; font-size: 15px; font-weight: 700;
+    background: #4f46e5; color: #fff; border: none; border-radius: 10px;
+    cursor: pointer; letter-spacing: 0.02em; transition: background 0.15s;
+  }
+  .btn-calc:hover { background: #4338ca; }
+  .btn-calc:disabled { background: #a5b4fc; cursor: default; }
+  .btn-reset {
+    flex: 1; padding: 13px; font-size: 14px; font-weight: 600;
+    background: #f8fafc; color: #64748b;
+    border: 1.5px solid #e2e8f0; border-radius: 10px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-reset:hover { background: #f1f5f9; }
+
+  /* Result */
+  .result { border-radius: 14px; overflow: hidden; margin-bottom: 24px; animation: fadeIn 0.35s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .result-banner { padding: 22px 24px; text-align: center; }
+  .result-label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .result-value { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+  .result-subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+  /* Risk bar */
+  .risk-bar-container { padding: 16px 24px; background: #fff; }
+  .risk-bar { position: relative; height: 28px; background: #f1f5f9; border-radius: 14px; overflow: hidden; margin-bottom: 8px; }
+  .risk-zone { position: absolute; top: 0; bottom: 0; }
+  .risk-zone.low { left: 0; width: 25%; background: #dcfce7; border-right: 2px solid #86efac; }
+  .risk-zone.indet { left: 25%; width: 37%; background: #fef9c3; border-right: 2px solid #fde047; }
+  .risk-zone.high { left: 62%; right: 0; background: #fee2e2; }
+  .risk-marker {
+    position: absolute; top: 2px; bottom: 2px; width: 24px;
+    border-radius: 12px; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    transform: translateX(-50%); transition: left 0.4s ease;
+  }
+  .risk-labels { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+  .risk-labels span:nth-child(2) { margin-left: 8%; }
+  .risk-labels span:nth-child(3) { margin-right: 6%; }
+
+  .result-description { padding: 14px 24px; font-size: 14px; color: #475569; text-align: center; }
+
+  /* Info box */
+  .info-box { background: #f8fafc; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+  .info-box h3 { font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 10px; }
+  .info-box p { font-size: 13px; color: #64748b; margin-bottom: 8px; }
+  .info-box p:last-child { margin-bottom: 0; }
+
+  /* Disclaimer */
+  .disclaimer { font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.6; padding: 0 12px; }
+
+  /* Responsive */
+  @media (max-width: 540px) {
+    .grid { grid-template-columns: 1fr; }
+    .container { padding: 16px 12px; }
+    .card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <!-- Header -->
+    <div class="header">
+      <h1>Advanced Fibrosis Risk Calculator</h1>
+      <p>For MASLD patients with indeterminate FIB-4 (1.3&ndash;2.67)</p>
+    </div>
+
+    <!-- Input Fields -->
+    <div class="section-title">Patient Parameters</div>
+    <div class="grid" id="inputs">
+      <!-- Generated by JS -->
+    </div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn-calc" id="calcBtn" onclick="calculate()">Calculate Risk</button>
+      <button class="btn-reset" onclick="resetForm()">Reset</button>
+    </div>
+
+    <!-- Result (hidden initially) -->
+    <div id="resultContainer" style="display:none;"></div>
+  </div>
+
+  <!-- About -->
+  <div class="info-box">
+    <h3>About This Calculator</h3>
+    <p>This calculator implements an L2-regularized logistic regression model developed and validated for predicting advanced hepatic fibrosis (F&ge;3) in patients with metabolic dysfunction-associated steatotic liver disease (MASLD) who have indeterminate FIB-4 scores (1.3&ndash;2.67).</p>
+    <p>The model was trained on 1,581 patients from the NAFLD DB2 biopsy-confirmed cohort and validated across internal, Asian (LiveFbr), and NHANES population-based cohorts.</p>
+    <p><strong>Risk thresholds:</strong> &lt;0.25 = Low risk (rule out), 0.25&ndash;0.62 = Indeterminate, &ge;0.62 = High risk (rule in).</p>
+    <p><strong>Features used (10):</strong> Age, BMI, log(AST), log(ALT), log(GGT), Platelets, log(HbA1c), Diabetes status, Total Cholesterol, AST/ALT ratio.</p>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> This tool is intended for research and educational purposes only.
+    It is not a substitute for clinical judgment. All clinical decisions should be made by qualified
+    healthcare professionals in the context of each individual patient.
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MODEL PARAMETERS
+// ═══════════════════════════════════════════════════════════════
+
+const MODEL = {
+  intercept: -1.308273752775033,
+  features: ["age","bmi","ast_log","alt_log","ggt_log","platelets","hba1c_log","diabetes","cholesterol","ast_alt_ratio"],
+  coefficients: {
+    age: 0.46243435175643643, bmi: 0.3633024464287879,
+    ast_log: 1.9070388402113998, alt_log: -1.6801176501679467,
+    ggt_log: 0.49533074477692024, platelets: -0.6638672205531498,
+    hba1c_log: 0.1777409619083014, diabetes: 0.19621154291302123,
+    cholesterol: -0.2724312082323864, ast_alt_ratio: -0.47471585739914884
+  },
+  scaler_means: {
+    age: 49.951296647691336, bmi: 34.46683744465528,
+    ast_log: 3.6748166929600568, alt_log: 3.9245696148659284,
+    ggt_log: 3.865424548612931, platelets: 238320.05060088553,
+    hba1c_log: 1.969970731745562, diabetes: 0.33649588867805186,
+    cholesterol: 184.91524351676154, ast_alt_ratio: 0.8332148103668242
+  },
+  scaler_stds: {
+    age: 12.529465583430557, bmi: 6.742973909605373,
+    ast_log: 0.5294716136649897, alt_log: 0.6271020846468849,
+    ggt_log: 0.7696293820814604, platelets: 75728.73479814474,
+    hba1c_log: 0.15057642607614988, diabetes: 0.4725107465241611,
+    cholesterol: 42.92105223846399, ast_alt_ratio: 0.35912402258659876
+  },
+  thresholds: { rule_out: 0.25, rule_in: 0.62 }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// FIELD DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+
+const FIELDS = [
+  { key: "age", label: "Age", unit: "years", min: 18, max: 100, step: 1, placeholder: "e.g. 52" },
+  { key: "bmi", label: "BMI", unit: "kg/m\u00B2", min: 15, max: 70, step: 0.1, placeholder: "e.g. 31.5" },
+  { key: "ast", label: "AST", unit: "U/L", min: 1, max: 1000, step: 1, placeholder: "e.g. 45" },
+  { key: "alt", label: "ALT", unit: "U/L", min: 1, max: 1000, step: 1, placeholder: "e.g. 58" },
+  { key: "ggt", label: "GGT", unit: "U/L", min: 1, max: 2000, step: 1, placeholder: "e.g. 62" },
+  { key: "platelets_clinical", label: "Platelets", unit: "\u00D710\u2079/L", min: 10, max: 900, step: 1, placeholder: "e.g. 210" },
+  { key: "hba1c", label: "HbA1c", unit: "%", min: 3.0, max: 18.0, step: 0.1, placeholder: "e.g. 6.1" },
+  { key: "cholesterol", label: "Total Cholesterol", unit: "mg/dL", min: 50, max: 500, step: 1, placeholder: "e.g. 195" },
+];
+
+let diabetesValue = null;
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD INPUT FORM
+// ═══════════════════════════════════════════════════════════════
+
+function buildForm() {
+  const grid = document.getElementById("inputs");
+  let html = "";
+  for (const f of FIELDS) {
+    html += `<div class="field">
+      <label>${f.label} <span class="unit">(${f.unit})</span></label>
+      <input type="number" id="inp_${f.key}" placeholder="${f.placeholder}" min="${f.min}" max="${f.max}" step="${f.step}" oninput="clearResult()">
+      <div class="error-msg" id="err_${f.key}"></div>
+    </div>`;
+  }
+  // Diabetes toggle (full width)
+  html += `<div class="field full-width">
+    <label>Diabetes</label>
+    <div class="toggle-group">
+      <button class="toggle-btn" id="dm_no" onclick="setDiabetes(false)">No</button>
+      <button class="toggle-btn" id="dm_yes" onclick="setDiabetes(true)">Yes</button>
+    </div>
+    <div class="error-msg" id="err_diabetes"></div>
+  </div>`;
+  grid.innerHTML = html;
+}
+
+function setDiabetes(val) {
+  diabetesValue = val;
+  document.getElementById("dm_no").className = "toggle-btn" + (val === false ? " active" : "");
+  document.getElementById("dm_yes").className = "toggle-btn" + (val === true ? " active" : "");
+  document.getElementById("err_diabetes").textContent = "";
+  clearResult();
+}
+
+function clearResult() {
+  document.getElementById("resultContainer").style.display = "none";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PREDICTION
+// ═══════════════════════════════════════════════════════════════
+
+function calculate() {
+  // Clear errors
+  for (const f of FIELDS) document.getElementById("err_" + f.key).textContent = "";
+  document.getElementById("err_diabetes").textContent = "";
+
+  let hasError = false;
+  const parsed = {};
+
+  for (const f of FIELDS) {
+    const el = document.getElementById("inp_" + f.key);
+    const raw = el.value.trim();
+    if (!raw) {
+      document.getElementById("err_" + f.key).textContent = "Required";
+      el.classList.add("error");
+      hasError = true; continue;
+    }
+    const num = parseFloat(raw);
+    if (isNaN(num)) {
+      document.getElementById("err_" + f.key).textContent = "Must be a number";
+      el.classList.add("error");
+      hasError = true; continue;
+    }
+    if (num < f.min || num > f.max) {
+      document.getElementById("err_" + f.key).textContent = `Range: ${f.min}\u2013${f.max}`;
+      el.classList.add("error");
+      hasError = true; continue;
+    }
+    el.classList.remove("error");
+    parsed[f.key] = num;
+  }
+
+  if (diabetesValue === null) {
+    document.getElementById("err_diabetes").textContent = "Please select";
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  // Compute derived features
+  const ast_log = Math.log1p(parsed.ast);
+  const alt_log = Math.log1p(parsed.alt);
+  const ggt_log = Math.log1p(parsed.ggt);
+  const hba1c_log = Math.log1p(parsed.hba1c);
+  const platelets = parsed.platelets_clinical * 1000;
+  const ast_alt_ratio = parsed.ast / parsed.alt;
+  const diabetes = diabetesValue ? 1 : 0;
+
+  const fv = {
+    age: parsed.age, bmi: parsed.bmi,
+    ast_log, alt_log, ggt_log, platelets,
+    hba1c_log, diabetes, cholesterol: parsed.cholesterol, ast_alt_ratio
+  };
+
+  // Standardize + linear predictor
+  let logit = MODEL.intercept;
+  for (const f of MODEL.features) {
+    const z = (fv[f] - MODEL.scaler_means[f]) / MODEL.scaler_stds[f];
+    logit += MODEL.coefficients[f] * z;
+  }
+
+  const prob = 1 / (1 + Math.exp(-logit));
+
+  // Category
+  let cat, color, bg, desc;
+  if (prob < MODEL.thresholds.rule_out) {
+    cat = "Low Risk"; color = "#15803d"; bg = "#f0fdf4";
+    desc = "Below rule-out threshold. Advanced fibrosis unlikely.";
+  } else if (prob >= MODEL.thresholds.rule_in) {
+    cat = "High Risk"; color = "#dc2626"; bg = "#fef2f2";
+    desc = "Above rule-in threshold. Further evaluation recommended.";
+  } else {
+    cat = "Indeterminate"; color = "#d97706"; bg = "#fffbeb";
+    desc = "Between thresholds. Clinical judgment and additional testing advised.";
+  }
+
+  // Render
+  const pct = (prob * 100).toFixed(1);
+  const markerLeft = Math.min(Math.max(prob * 100, 1.5), 98.5);
+  const c = document.getElementById("resultContainer");
+  c.style.display = "block";
+  c.innerHTML = `
+    <div class="result" style="border: 2px solid ${color}30;">
+      <div class="result-banner" style="background:${bg}; border-bottom: 1px solid ${color}20;">
+        <div class="result-label" style="color:${color}">${cat}</div>
+        <div class="result-value" style="color:${color}">${pct}%</div>
+        <div class="result-subtitle">Predicted probability of advanced fibrosis (F\u22653)</div>
+      </div>
+      <div class="risk-bar-container">
+        <div class="risk-bar">
+          <div class="risk-zone low"></div>
+          <div class="risk-zone indet"></div>
+          <div class="risk-zone high"></div>
+          <div class="risk-marker" style="left:${markerLeft}%; background:${color};"></div>
+        </div>
+        <div class="risk-labels">
+          <span>0%</span>
+          <span>25% (rule-out)</span>
+          <span>62% (rule-in)</span>
+          <span>100%</span>
+        </div>
+      </div>
+      <div class="result-description" style="background:${bg}80; border-top: 1px solid ${color}15;">${desc}</div>
+    </div>`;
+
+  c.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function resetForm() {
+  for (const f of FIELDS) {
+    const el = document.getElementById("inp_" + f.key);
+    el.value = "";
+    el.classList.remove("error");
+    document.getElementById("err_" + f.key).textContent = "";
+  }
+  diabetesValue = null;
+  document.getElementById("dm_no").className = "toggle-btn";
+  document.getElementById("dm_yes").className = "toggle-btn";
+  document.getElementById("err_diabetes").textContent = "";
+  document.getElementById("resultContainer").style.display = "none";
+}
+
+// Init
+buildForm();
+</script>
+</body>
+</html>
