@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Advanced Fibrosis Risk Calculator | MASLD Indeterminate FIB-4</title>
-<meta name="description" content="Clinical calculator for predicting advanced fibrosis in MASLD patients with indeterminate FIB-4 scores (1.3-2.67). Validated L2-regularized logistic regression model.">
+<meta name="description" content="Clinical calculator for predicting advanced fibrosis in MASLD patients with indeterminate FIB-4 scores (1.3-2.67). Simplified 8-feature L2-regularized logistic regression model.">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; line-height: 1.5; }
@@ -74,9 +74,9 @@
   .risk-bar-container { padding: 16px 24px; background: #fff; }
   .risk-bar { position: relative; height: 28px; background: #f1f5f9; border-radius: 14px; overflow: hidden; margin-bottom: 8px; }
   .risk-zone { position: absolute; top: 0; bottom: 0; }
-  .risk-zone.low { left: 0; width: 25%; background: #dcfce7; border-right: 2px solid #86efac; }
-  .risk-zone.indet { left: 25%; width: 37%; background: #fef9c3; border-right: 2px solid #fde047; }
-  .risk-zone.high { left: 62%; right: 0; background: #fee2e2; }
+  .risk-zone.low { left: 0; width: 25.6%; background: #dcfce7; border-right: 2px solid #86efac; }
+  .risk-zone.indet { left: 25.6%; width: 33.6%; background: #fef9c3; border-right: 2px solid #fde047; }
+  .risk-zone.high { left: 59.2%; right: 0; background: #fee2e2; }
   .risk-marker {
     position: absolute; top: 2px; bottom: 2px; width: 24px;
     border-radius: 12px; border: 2px solid #fff;
@@ -84,8 +84,8 @@
     transform: translateX(-50%); transition: left 0.4s ease;
   }
   .risk-labels { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
-  .risk-labels span:nth-child(2) { margin-left: 8%; }
-  .risk-labels span:nth-child(3) { margin-right: 6%; }
+  .risk-labels span:nth-child(2) { margin-left: 5%; }
+  .risk-labels span:nth-child(3) { margin-right: 8%; }
 
   .result-description { padding: 14px 24px; font-size: 14px; color: #475569; text-align: center; }
 
@@ -112,7 +112,7 @@
     <!-- Header -->
     <div class="header">
       <h1>Advanced Fibrosis Risk Calculator</h1>
-      <p>For MASLD patients with indeterminate FIB-4 (1.3&ndash;2.67)</p>
+      <p>For MASLD patients with indeterminate FIB-4 (1.3–2.67)</p>
     </div>
 
     <!-- Input Fields -->
@@ -134,10 +134,10 @@
   <!-- About -->
   <div class="info-box">
     <h3>About This Calculator</h3>
-    <p>This calculator implements an L2-regularized logistic regression model developed and validated for predicting advanced hepatic fibrosis (F&ge;3) in patients with metabolic dysfunction-associated steatotic liver disease (MASLD) who have indeterminate FIB-4 scores (1.3&ndash;2.67).</p>
+    <p>This calculator implements an L2-regularized logistic regression model developed and validated for predicting advanced hepatic fibrosis (F&ge;3) in patients with metabolic dysfunction-associated steatotic liver disease (MASLD) who have indeterminate FIB-4 scores (1.3–2.67).</p>
     <p>The model was trained on 1,581 patients from the NAFLD DB2 biopsy-confirmed cohort and validated across internal, Asian (LiveFbr), and NHANES population-based cohorts.</p>
-    <p><strong>Risk thresholds:</strong> &lt;0.25 = Low risk (rule out), 0.25&ndash;0.62 = Indeterminate, &ge;0.62 = High risk (rule in).</p>
-    <p><strong>Features used (10):</strong> Age, BMI, log(AST), log(ALT), log(GGT), Platelets, log(HbA1c), Diabetes status, Total Cholesterol, AST/ALT ratio.</p>
+    <p><strong>Risk thresholds:</strong> &lt;0.256 = Low risk (rule out), 0.256–0.592 = Indeterminate, &ge;0.592 = High risk (rule in).</p>
+    <p><strong>Features used (7 inputs + 1 derived):</strong> Age, BMI, AST (U/L), ALT (U/L), GGT (U/L), Platelets (&times;10&sup9;/L), Diabetes status. AST/ALT ratio is calculated automatically.</p>
   </div>
 
   <!-- Disclaimer -->
@@ -150,38 +150,47 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-// MODEL PARAMETERS
+// MODEL PARAMETERS (8-feature model)
 // ═══════════════════════════════════════════════════════════════
 
 const MODEL = {
-  intercept: -1.308273752775033,
-  features: ["age","bmi","ast_log","alt_log","ggt_log","platelets","hba1c_log","diabetes","cholesterol","ast_alt_ratio"],
+  intercept: -1.2938195574226066,
+  features: ["age", "bmi", "ast_log", "alt_log", "ggt_log", "platelets", "diabetes", "ast_alt_ratio"],
   coefficients: {
-    age: 0.46243435175643643, bmi: 0.3633024464287879,
-    ast_log: 1.9070388402113998, alt_log: -1.6801176501679467,
-    ggt_log: 0.49533074477692024, platelets: -0.6638672205531498,
-    hba1c_log: 0.1777409619083014, diabetes: 0.19621154291302123,
-    cholesterol: -0.2724312082323864, ast_alt_ratio: -0.47471585739914884
+    age: 0.47812706715595105,
+    bmi: 0.3785487071652713,
+    ast_log: 1.9170632746913627,
+    alt_log: -1.7219456328868705,
+    ggt_log: 0.46040728958803795,
+    platelets: -0.6822389111254026,
+    diabetes: 0.3331626014517234,
+    ast_alt_ratio: -0.4753960846614913
   },
   scaler_means: {
-    age: 49.951296647691336, bmi: 34.46683744465528,
-    ast_log: 3.6748166929600568, alt_log: 3.9245696148659284,
-    ggt_log: 3.865424548612931, platelets: 238320.05060088553,
-    hba1c_log: 1.969970731745562, diabetes: 0.33649588867805186,
-    cholesterol: 184.91524351676154, ast_alt_ratio: 0.8332148103668242
+    age: 49.951296647691336,
+    bmi: 34.46683744465528,
+    ast_log: 3.6748166929600568,
+    alt_log: 3.924569614865929,
+    ggt_log: 3.865424548612931,
+    platelets: 238320.05060088553,
+    diabetes: 0.33649588867805186,
+    ast_alt_ratio: 0.8332148103668242
   },
   scaler_stds: {
-    age: 12.529465583430557, bmi: 6.742973909605373,
-    ast_log: 0.5294716136649897, alt_log: 0.6271020846468849,
-    ggt_log: 0.7696293820814604, platelets: 75728.73479814474,
-    hba1c_log: 0.15057642607614988, diabetes: 0.4725107465241611,
-    cholesterol: 42.92105223846399, ast_alt_ratio: 0.35912402258659876
+    age: 12.529465583430557,
+    bmi: 6.742973909605373,
+    ast_log: 0.5294716136649897,
+    alt_log: 0.627102084646885,
+    ggt_log: 0.7696293820814604,
+    platelets: 75728.73479814474,
+    diabetes: 0.4725107465241611,
+    ast_alt_ratio: 0.35912402258659876
   },
-  thresholds: { rule_out: 0.25, rule_in: 0.62 }
+  thresholds: { rule_out: 0.256, youden: 0.330, rule_in: 0.592 }
 };
 
 // ═══════════════════════════════════════════════════════════════
-// FIELD DEFINITIONS
+// FIELD DEFINITIONS (7 fields - AST/ALT ratio derived)
 // ═══════════════════════════════════════════════════════════════
 
 const FIELDS = [
@@ -190,9 +199,7 @@ const FIELDS = [
   { key: "ast", label: "AST", unit: "U/L", min: 1, max: 1000, step: 1, placeholder: "e.g. 45" },
   { key: "alt", label: "ALT", unit: "U/L", min: 1, max: 1000, step: 1, placeholder: "e.g. 58" },
   { key: "ggt", label: "GGT", unit: "U/L", min: 1, max: 2000, step: 1, placeholder: "e.g. 62" },
-  { key: "platelets_clinical", label: "Platelets", unit: "\u00D710\u2079/L", min: 10, max: 900, step: 1, placeholder: "e.g. 210" },
-  { key: "hba1c", label: "HbA1c", unit: "%", min: 3.0, max: 18.0, step: 0.1, placeholder: "e.g. 6.1" },
-  { key: "cholesterol", label: "Total Cholesterol", unit: "mg/dL", min: 50, max: 500, step: 1, placeholder: "e.g. 195" },
+  { key: "platelets_clinical", label: "Platelets", unit: "\u00D710\u2079/L", min: 10, max: 900, step: 1, placeholder: "e.g. 210" }
 ];
 
 let diabetesValue = null;
@@ -281,15 +288,19 @@ function calculate() {
   const ast_log = Math.log1p(parsed.ast);
   const alt_log = Math.log1p(parsed.alt);
   const ggt_log = Math.log1p(parsed.ggt);
-  const hba1c_log = Math.log1p(parsed.hba1c);
   const platelets = parsed.platelets_clinical * 1000;
   const ast_alt_ratio = parsed.ast / parsed.alt;
   const diabetes = diabetesValue ? 1 : 0;
 
   const fv = {
-    age: parsed.age, bmi: parsed.bmi,
-    ast_log, alt_log, ggt_log, platelets,
-    hba1c_log, diabetes, cholesterol: parsed.cholesterol, ast_alt_ratio
+    age: parsed.age,
+    bmi: parsed.bmi,
+    ast_log,
+    alt_log,
+    ggt_log,
+    platelets,
+    diabetes,
+    ast_alt_ratio
   };
 
   // Standardize + linear predictor
@@ -335,8 +346,8 @@ function calculate() {
         </div>
         <div class="risk-labels">
           <span>0%</span>
-          <span>25% (rule-out)</span>
-          <span>62% (rule-in)</span>
+          <span>25.6% (rule-out)</span>
+          <span>59.2% (rule-in)</span>
           <span>100%</span>
         </div>
       </div>
