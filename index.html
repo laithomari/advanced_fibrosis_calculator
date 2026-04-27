@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advanced Fibrosis Risk Calculator | MASLD Indeterminate FIB-4</title>
+<meta name="description" content="Clinical calculator for predicting advanced fibrosis in MASLD patients with indeterminate FIB-4 scores (1.3-2.67). 8-feature L2-regularized logistic regression model.">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f1f5f9; color: #1e293b; line-height: 1.5; }
+  .container { max-width: 700px; margin: 0 auto; padding: 32px 20px; }
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04); padding: 32px; margin-bottom: 20px; }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+  .header h1 { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; letter-spacing: -0.01em; }
+  .header p { font-size: 14px; color: #64748b; }
+
+  /* Section titles */
+  .section-title { font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  .full-width { grid-column: 1 / -1; }
+
+  /* Fields */
+  .field label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+  .field label .unit { font-weight: 400; color: #9ca3af; }
+  .field input {
+    width: 100%; padding: 9px 12px; font-size: 15px;
+    border: 1.5px solid #d1d5db; border-radius: 8px; outline: none;
+    background: #fff; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .field input.error { border-color: #fca5a5; background: #fef2f2; }
+  .field .error-msg { font-size: 11px; color: #ef4444; margin-top: 2px; }
+
+  /* Toggle */
+  .toggle-group { display: flex; gap: 8px; }
+  .toggle-btn {
+    flex: 1; padding: 9px 0; font-size: 14px; font-weight: 600;
+    border: 1.5px solid #d1d5db; border-radius: 8px; cursor: pointer;
+    background: #fff; color: #6b7280; transition: all 0.15s;
+  }
+  .toggle-btn:hover { border-color: #a5b4fc; }
+  .toggle-btn.active { border-color: #6366f1; background: #eef2ff; color: #4338ca; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 12px; margin: 24px 0; }
+  .btn-calc {
+    flex: 2; padding: 13px; font-size: 15px; font-weight: 700;
+    background: #4f46e5; color: #fff; border: none; border-radius: 10px;
+    cursor: pointer; letter-spacing: 0.02em; transition: background 0.15s;
+  }
+  .btn-calc:hover { background: #4338ca; }
+  .btn-calc:disabled { background: #a5b4fc; cursor: default; }
+  .btn-reset {
+    flex: 1; padding: 13px; font-size: 14px; font-weight: 600;
+    background: #f8fafc; color: #64748b;
+    border: 1.5px solid #e2e8f0; border-radius: 10px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-reset:hover { background: #f1f5f9; }
+
+  /* Result */
+  .result { border-radius: 14px; overflow: hidden; margin-bottom: 24px; animation: fadeIn 0.35s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .result-banner { padding: 22px 24px; text-align: center; }
+  .result-label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .result-value { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+  .result-subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+  /* Risk bar */
+  .risk-bar-container { padding: 16px 24px; background: #fff; }
+  .risk-bar { position: relative; height: 28px; background: #f1f5f9; border-radius: 14px; overflow: hidden; margin-bottom: 8px; }
+  .risk-zone { position: absolute; top: 0; bottom: 0; }
+  .risk-zone.low { left: 0; width: 25.61%; background: #dcfce7; border-right: 2px solid #86efac; }
+  .risk-zone.indet { left: 25.61%; width: 33.61%; background: #fef9c3; border-right: 2px solid #fde047; }
+  .risk-zone.high { left: 59.22%; right: 0; background: #fee2e2; }
+  .risk-marker {
+    position: absolute; top: 2px; bottom: 2px; width: 24px;
+    border-radius: 12px; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    transform: translateX(-50%); transition: left 0.4s ease;
+  }
+  .risk-labels { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+  .risk-labels span:nth-child(2) { margin-left: 5%; }
+  .risk-labels span:nth-child(3) { margin-right: 8%; }
+
+  .result-description { padding: 14px 24px; font-size: 14px; color: #475569; text-align: center; }
+
+  /* FIB-4 result panels */
+  .fib4-panel { border-radius: 14px; overflow: hidden; margin-bottom: 24px; animation: fadeIn 0.35s ease; }
+  .fib4-banner { padding: 22px 24px; text-align: center; }
+  .fib4-body { padding: 16px 24px; background: #fff; font-size: 14px; color: #1e293b; line-height: 1.7; }
+  .fib4-body .heading { font-weight: 700; margin-bottom: 8px; }
+  .fib4-body .description { margin-bottom: 6px; }
+  .recommendation { margin-top: 12px; padding: 12px 16px; border-radius: 8px; }
+  .recommendation .rec-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .recommendation .rec-text { font-size: 13px; color: #374151; }
+
+  /* FIB-4 badge */
+  .fib4-badge { background: #f8fafc; padding: 10px 24px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #64748b; }
+  .fib4-badge strong { color: #d97706; }
+  .fib4-badge .tag { margin-left: 6px; color: #d97706; font-weight: 600; }
+
+  /* Info box */
+  .info-box { background: #f8fafc; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+  .info-box h3 { font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 10px; }
+  .info-box p { font-size: 13px; color: #64748b; margin-bottom: 8px; }
+  .info-box p:last-child { margin-bottom: 0; }
+
+  /* Disclaimer */
+  .disclaimer { font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.6; padding: 0 12px; }
+
+  /* Responsive */
+  @media (max-width: 540px) {
+    .grid { grid-template-columns: 1fr; }
+    .container { padding: 16px 12px; }
+    .card { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <!-- Header -->
+    <div class="header">
+      <h1>Advanced Fibrosis Risk Calculator</h1>
+      <p>For MASLD patients with indeterminate FIB-4 (1.3–2.67)</p>
+    </div>
+
+    <!-- Input Fields -->
+    <div class="section-title">Patient Parameters</div>
+    <div class="grid" id="inputs">
+      <!-- Generated by JS -->
+    </div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn-calc" id="calcBtn" onclick="calculate()">Calculate Risk</button>
+      <button class="btn-reset" onclick="resetForm()">Reset</button>
+    </div>
+
+    <!-- Result (hidden initially) -->
+    <div id="resultContainer" style="display:none;"></div>
+  </div>
+
+  <!-- About -->
+  <div class="info-box">
+    <h3>About This Calculator</h3>
+    <p>This calculator implements an L2-regularized logistic regression model developed and validated for predicting advanced hepatic fibrosis (F&ge;3) in patients with metabolic dysfunction-associated steatotic liver disease (MASLD) who have indeterminate FIB-4 scores (1.3–2.67).</p>
+    <p>The model was trained on 1,581 patients from the NAFLD DB2 biopsy-confirmed cohort and validated across internal, Asian (LiveFbr), and NHANES population-based cohorts.</p>
+    <p><strong>FIB-4 gating:</strong> The calculator first computes the patient's FIB-4 score. If the FIB-4 is low (&lt;1.3) or high (&gt;2.67), the model is not applied and FIB-4-based recommendations are provided instead. The prediction model is only used for patients in the indeterminate FIB-4 range (1.3–2.67).</p>
+    <p><strong>Risk thresholds:</strong> &lt;0.256 = Low risk (rule out), 0.256–0.592 = Indeterminate, &ge;0.592 = High risk (rule in).</p>
+    <p><strong>Features used (7 inputs + 1 derived):</strong> Age, BMI, AST (U/L), ALT (U/L), GGT (U/L), Platelets (&times;10&sup9;/L), Diabetes status. AST/ALT ratio and FIB-4 are calculated automatically.</p>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> This tool is intended for research and educational purposes only.
+    It is not a substitute for clinical judgment. All clinical decisions should be made by qualified
+    healthcare professionals in the context of each individual patient.
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MODEL PARAMETERS (8-feature model)
+// Source: results.json from model_development.py
+// ═══════════════════════════════════════════════════════════════
+
+const MODEL = {
+  intercept: -1.2938195574226066,
+  features: ["age", "bmi", "ast_log", "alt_log", "ggt_log", "platelets", "diabetes", "ast_alt_ratio"],
+  coefficients: {
+    age: 0.47812706715595105,
+    bmi: 0.3785487071652713,
+    ast_log: 1.9170632746913627,
+    alt_log: -1.7219456328868705,
+    ggt_log: 0.46040728958803795,
+    platelets: -0.6822389111254026,
+    diabetes: 0.3331626014517234,
+    ast_alt_ratio: -0.4753960846614913
+  },
+  scaler_means: {
+    age: 49.951296647691336,
+    bmi: 34.46683744465528,
+    ast_log: 3.6748166929600568,
+    alt_log: 3.924569614865929,
+    ggt_log: 3.865424548612931,
+    platelets: 238320.05060088553,
+    diabetes: 0.33649588867805186,
+    ast_alt_ratio: 0.8332148103668242
+  },
+  scaler_stds: {
+    age: 12.529465583430557,
+    bmi: 6.742973909605373,
+    ast_log: 0.5294716136649897,
+    alt_log: 0.627102084646885,
+    ggt_log: 0.7696293820814604,
+    platelets: 75728.73479814474,
+    diabetes: 0.4725107465241611,
+    ast_alt_ratio: 0.35912402258659876
+  },
+  thresholds: { rule_out: 0.2561, youden: 0.3295, rule_in: 0.5922 }
+};
+
+// FIB-4 thresholds
+const FIB4_LOW = 1.3;
+const FIB4_HIGH = 2.67;
+
+// ═══════════════════════════════════════════════════════════════
+// FIELD DEFINITIONS (7 fields — AST/ALT ratio derived)
+// ═══════════════════════════════════════════════════════════════
+
+const FIELDS = [
+  { key: "age", label: "Age", unit: "years", min: 18, max: 100, step: 1, placeholder: "e.g. 52" },
+  { key: "bmi", label: "BMI", unit: "kg/m²", min: 15, max: 70, step: 0.1, placeholder: "e.g. 31.5" },
+  { key: "ast", label: "AST", unit: "U/L", min: 1, max: 1000, step: 1, placeholder: "e.g. 45" },
+  { key: "alt", label: "ALT", unit: "U/L", min: 1, max: 1000, step: 1, placeholder: "e.g. 58" },
+  { key: "ggt", label: "GGT", unit: "U/L", min: 1, max: 2000, step: 1, placeholder: "e.g. 62" },
+  { key: "platelets_clinical", label: "Platelets", unit: "×10⁹/L", min: 10, max: 900, step: 1, placeholder: "e.g. 210" }
+];
+
+let diabetesValue = null;
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD INPUT FORM
+// ═══════════════════════════════════════════════════════════════
+
+function buildForm() {
+  const grid = document.getElementById("inputs");
+  let html = "";
+  for (const f of FIELDS) {
+    html += `<div class="field">
+      <label>${f.label} <span class="unit">(${f.unit})</span></label>
+      <input type="number" id="inp_${f.key}" placeholder="${f.placeholder}" min="${f.min}" max="${f.max}" step="${f.step}" oninput="clearResult()">
+      <div class="error-msg" id="err_${f.key}"></div>
+    </div>`;
+  }
+  // Diabetes toggle (full width)
+  html += `<div class="field full-width">
+    <label>Diabetes</label>
+    <div class="toggle-group">
+      <button class="toggle-btn" id="dm_no" onclick="setDiabetes(false)">No</button>
+      <button class="toggle-btn" id="dm_yes" onclick="setDiabetes(true)">Yes</button>
+    </div>
+    <div class="error-msg" id="err_diabetes"></div>
+  </div>`;
+  grid.innerHTML = html;
+}
+
+function setDiabetes(val) {
+  diabetesValue = val;
+  document.getElementById("dm_no").className = "toggle-btn" + (val === false ? " active" : "");
+  document.getElementById("dm_yes").className = "toggle-btn" + (val === true ? " active" : "");
+  document.getElementById("err_diabetes").textContent = "";
+  clearResult();
+}
+
+function clearResult() {
+  document.getElementById("resultContainer").style.display = "none";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIB-4 CALCULATION
+// FIB-4 = (Age × AST) / (Platelets [×10⁹/L] × √ALT)
+// ═══════════════════════════════════════════════════════════════
+
+function calculateFib4(age, ast, alt, platelets_clinical) {
+  if (!age || !ast || !alt || !platelets_clinical || platelets_clinical === 0 || alt <= 0) return null;
+  return (age * ast) / (platelets_clinical * Math.sqrt(alt));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALCULATE — with FIB-4 gating
+// ═══════════════════════════════════════════════════════════════
+
+function calculate() {
+  // Clear errors
+  for (const f of FIELDS) document.getElementById("err_" + f.key).textContent = "";
+  document.getElementById("err_diabetes").textContent = "";
+
+  let hasError = false;
+  const parsed = {};
+
+  for (const f of FIELDS) {
+    const el = document.getElementById("inp_" + f.key);
+    const raw = el.value.trim();
+    if (!raw) {
+      document.getElementById("err_" + f.key).textContent = "Required";
+      el.classList.add("error");
+      hasError = true; continue;
+    }
+    const num = parseFloat(raw);
+    if (isNaN(num)) {
+      document.getElementById("err_" + f.key).textContent = "Must be a number";
+      el.classList.add("error");
+      hasError = true; continue;
+    }
+    if (num < f.min || num > f.max) {
+      document.getElementById("err_" + f.key).textContent = `Range: ${f.min}–${f.max}`;
+      el.classList.add("error");
+      hasError = true; continue;
+    }
+    el.classList.remove("error");
+    parsed[f.key] = num;
+  }
+
+  if (diabetesValue === null) {
+    document.getElementById("err_diabetes").textContent = "Please select";
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  const c = document.getElementById("resultContainer");
+
+  // Step 1: Calculate FIB-4
+  const fib4 = calculateFib4(parsed.age, parsed.ast, parsed.alt, parsed.platelets_clinical);
+
+  // Step 2: Check FIB-4 range — gate before running model
+  if (fib4 !== null && fib4 < FIB4_LOW) {
+    c.style.display = "block";
+    c.innerHTML = renderFib4Low(fib4);
+    c.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+
+  if (fib4 !== null && fib4 > FIB4_HIGH) {
+    c.style.display = "block";
+    c.innerHTML = renderFib4High(fib4);
+    c.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+
+  // Step 3: Indeterminate FIB-4 — run the prediction model
+  const ast_log = Math.log1p(parsed.ast);
+  const alt_log = Math.log1p(parsed.alt);
+  const ggt_log = Math.log1p(parsed.ggt);
+  const platelets = parsed.platelets_clinical * 1000;
+  const ast_alt_ratio = parsed.ast / parsed.alt;
+  const diabetes = diabetesValue ? 1 : 0;
+
+  const fv = { age: parsed.age, bmi: parsed.bmi, ast_log, alt_log, ggt_log, platelets, diabetes, ast_alt_ratio };
+
+  // Standardize + linear predictor
+  let logit = MODEL.intercept;
+  for (const f of MODEL.features) {
+    const z = (fv[f] - MODEL.scaler_means[f]) / MODEL.scaler_stds[f];
+    logit += MODEL.coefficients[f] * z;
+  }
+
+  const prob = 1 / (1 + Math.exp(-logit));
+
+  // Category
+  let cat, color, bg, desc;
+  if (prob < MODEL.thresholds.rule_out) {
+    cat = "Low Risk"; color = "#15803d"; bg = "#f0fdf4";
+    desc = "Below rule-out threshold. Advanced fibrosis unlikely.";
+  } else if (prob >= MODEL.thresholds.rule_in) {
+    cat = "High Risk"; color = "#dc2626"; bg = "#fef2f2";
+    desc = "Above rule-in threshold. Further evaluation recommended.";
+  } else {
+    cat = "Indeterminate"; color = "#d97706"; bg = "#fffbeb";
+    desc = "Between thresholds. Clinical judgment and additional testing advised.";
+  }
+
+  // Render
+  const pct = (prob * 100).toFixed(1);
+  const markerLeft = Math.min(Math.max(prob * 100, 1.5), 98.5);
+  const fib4Display = fib4 !== null ? fib4.toFixed(2) : "N/A";
+
+  c.style.display = "block";
+  c.innerHTML = `
+    <div class="result" style="border: 2px solid ${color}30;">
+      <div class="fib4-badge">
+        FIB-4 = <strong>${fib4Display}</strong>
+        <span class="tag">(Indeterminate)</span>
+      </div>
+      <div class="result-banner" style="background:${bg}; border-bottom: 1px solid ${color}20;">
+        <div class="result-label" style="color:${color}">${cat}</div>
+        <div class="result-value" style="color:${color}">${pct}%</div>
+        <div class="result-subtitle">Predicted probability of advanced fibrosis (F≥3)</div>
+      </div>
+      <div class="risk-bar-container">
+        <div class="risk-bar">
+          <div class="risk-zone low"></div>
+          <div class="risk-zone indet"></div>
+          <div class="risk-zone high"></div>
+          <div class="risk-marker" style="left:${markerLeft}%; background:${color};"></div>
+        </div>
+        <div class="risk-labels">
+          <span>0%</span>
+          <span>25.6% (rule-out)</span>
+          <span>59.2% (rule-in)</span>
+          <span>100%</span>
+        </div>
+      </div>
+      <div class="result-description" style="background:${bg}80; border-top: 1px solid ${color}15;">${desc}</div>
+    </div>`;
+
+  c.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIB-4 RESULT RENDERERS
+// ═══════════════════════════════════════════════════════════════
+
+function renderFib4Low(fib4) {
+  return `
+    <div class="fib4-panel" style="border: 2px solid #6366f130;">
+      <div class="fib4-banner" style="background: #eef2ff; border-bottom: 1px solid #6366f120;">
+        <div class="result-label" style="color: #4338ca;">Low FIB-4 Score</div>
+        <div class="result-value" style="color: #4338ca;">${fib4.toFixed(2)}</div>
+        <div class="result-subtitle">FIB-4 &lt; 1.3 &mdash; Low risk category</div>
+      </div>
+      <div class="fib4-body">
+        <div class="heading" style="color: #4338ca;">
+          This patient does not require the advanced fibrosis prediction model.
+        </div>
+        <div class="description">
+          A FIB-4 score below 1.3 indicates a <strong>low probability of advanced fibrosis</strong>.
+          This calculator is designed specifically for patients in the indeterminate FIB-4 range (1.3–2.67)
+          where further risk stratification is needed.
+        </div>
+        <div class="recommendation" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
+          <div class="rec-title" style="color: #15803d;">Recommendation</div>
+          <div class="rec-text">
+            Low FIB-4 has a high negative predictive value for excluding advanced fibrosis.
+            Standard follow-up with repeat FIB-4 in 1–2 years is generally recommended per
+            current AASLD guidelines, unless clinical suspicion remains high.
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderFib4High(fib4) {
+  return `
+    <div class="fib4-panel" style="border: 2px solid #dc262630;">
+      <div class="fib4-banner" style="background: #fef2f2; border-bottom: 1px solid #dc262620;">
+        <div class="result-label" style="color: #dc2626;">High FIB-4 Score</div>
+        <div class="result-value" style="color: #dc2626;">${fib4.toFixed(2)}</div>
+        <div class="result-subtitle">FIB-4 &gt; 2.67 &mdash; High risk category</div>
+      </div>
+      <div class="fib4-body">
+        <div class="heading" style="color: #dc2626;">
+          This patient does not require the advanced fibrosis prediction model.
+        </div>
+        <div class="description">
+          A FIB-4 score above 2.67 already indicates a <strong>high probability of advanced fibrosis</strong>.
+          This calculator is designed specifically for patients in the indeterminate FIB-4 range (1.3–2.67)
+          where further risk stratification is needed.
+        </div>
+        <div class="recommendation" style="background: #fef2f2; border: 1px solid #fecaca;">
+          <div class="rec-title" style="color: #dc2626;">Recommendation</div>
+          <div class="rec-text">
+            High FIB-4 has a high positive predictive value for advanced fibrosis. Current
+            AASLD guidelines recommend further evaluation with liver stiffness measurement
+            (e.g., vibration-controlled transient elastography) or direct referral to
+            hepatology for consideration of liver biopsy and management of advanced fibrosis
+            or cirrhosis.
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function resetForm() {
+  for (const f of FIELDS) {
+    const el = document.getElementById("inp_" + f.key);
+    el.value = "";
+    el.classList.remove("error");
+    document.getElementById("err_" + f.key).textContent = "";
+  }
+  diabetesValue = null;
+  document.getElementById("dm_no").className = "toggle-btn";
+  document.getElementById("dm_yes").className = "toggle-btn";
+  document.getElementById("err_diabetes").textContent = "";
+  document.getElementById("resultContainer").style.display = "none";
+}
+
+// Init
+buildForm();
+</script>
+</body>
+</html>
