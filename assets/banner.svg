@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#2d5a8e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="160" rx="12" fill="url(#bg)"/>
+
+  <!-- Subtle divider line -->
+  <line x1="60" y1="115" x2="840" y2="115" stroke="#ffffff" stroke-opacity="0.15" stroke-width="1"/>
+
+  <!-- Title -->
+  <text x="450" y="62" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="30" font-weight="700" fill="#ffffff" letter-spacing="-0.5">
+    Advanced Fibrosis Risk Calculator
+  </text>
+
+  <!-- Subtitle -->
+  <text x="450" y="95" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="16" fill="#94b8d8" letter-spacing="0.5">
+    MASLD &bull; Indeterminate FIB-4 (1.3–2.67) &bull; 8-Feature Model
+  </text>
+
+  <!-- Bottom tagline -->
+  <text x="450" y="140" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6b92b8" letter-spacing="1.5">
+    VALIDATED ACROSS INTERNAL, ASIAN EXTERNAL, AND NHANES COHORTS
+  </text>
+</svg>
